@@ -10,6 +10,8 @@ import socket
 import json
 import os
 import copy
+import pickle
+import sklearn
 
 ## GLOBAL VARS
 # learning rates
@@ -34,7 +36,7 @@ header = ['time', 'source.IP', 'dest.IP', 'source.port', 'dest.port', 'nw_proto'
 
 ## TIMER MODULE FUNCTION
 # timer function that invokes write-out periodically
-def _timer_func (writer, sock):
+def _timer_func (writer, sock, loaded_model):
     for connection in core.openflow._connections.values():
         connection.send(of.ofp_stats_request(body=of.ofp_flow_stats_request()))
         # connection.send(of.ofp_stats_request(body=of.ofp_port_stats_request()))
@@ -42,10 +44,14 @@ def _timer_func (writer, sock):
         log.debug("updating flow stats in file...")
         now = time()
         for key, f in flows.items():
-            writer.writerow(f.to_list(now))
+            l = f.to_list(now)
+            writer.writerow(l)
             flows[key].update_rtt_iat(key)                  # update iat & rtt every sampling time
             history[key] = copy.deepcopy(flows[key])        # store current state in history
             # send_data(sock, json.dumps(f.to_list()))
+            if loaded_model is not None:
+                pred = loaded_model.predict(l[1:])
+
 
 
 
@@ -193,7 +199,7 @@ def _handle_portstats_received (event):
 
 
 
-def launch (filename, HOST= None, PORT = None):
+def launch (filename, HOST= None, PORT = None, classifier= None):
     from pox.lib.recoco import Timer
 
     # attach listeners
@@ -206,7 +212,14 @@ def launch (filename, HOST= None, PORT = None):
     writer = csv.writer(file)
     writer.writerow(header)
 
+    # load classifier
+    loaded_model = None
+    if classifier is not None:
+        classifier_path = "/model/" + classifier + ".pth"
+        loaded_model = pickle.load(open(classifier_path, 'wb'))
+
     # data sending over network to data plane/intelligence
+    sock = None
     if not (HOST is None or PORT is None):
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -214,9 +227,6 @@ def launch (filename, HOST= None, PORT = None):
             log.debug("successfully connected to server")
         except:
             log.debug("failure in socket")
-    else:
-        sock = None
-
 
     # timer to execute stats request periodically
-    Timer(T, _timer_func, args= [writer, sock], recurring=True)
+    Timer(T, _timer_func, args= [writer, sock, loaded_model], recurring=True)
