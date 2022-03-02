@@ -1,0 +1,1 @@
+./pox.py log.level --DEBUG l2_learning_mod flow_info_extractor --filename=$1
