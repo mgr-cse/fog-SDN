@@ -6,12 +6,22 @@ from mininet import net
 
 pcapPath = './pcaps/'
 
-def setClients(net:net, clients):
+def startDump(net:net, hosts):
     hostnum = 1
-    for host in clients:
+    for host in hosts:
         host.cmd('tcpdump -w '+pcapPath+'h'+str(hostnum)+'.pcap&')
         print("starting tcpdump on host: ", host)
         time.sleep(1)
+        hostnum += 1
+
+
+def startClients(net:net, clients):
+    basePort = 10001
+    hostnum = 1
+    for host in clients:
+        print("starting ITGSend on host: ", host)
+        print(host.cmd('ITGSend -a 10.0.0.1 -rp '+str(basePort)+' -C 1000 -c 512 -T TCP &'))
+        basePort += 1
         hostnum += 1
 
 def Test(net:net):
@@ -20,26 +30,24 @@ def Test(net:net):
     hosts = []
     for i in range(1, numHosts + 1):
         hosts.append(net.get('h'+str(i)))
+
+    serv = hosts[0]
+    clients = hosts[1:]
     
     # run tcpdump on each node
-    setClients(net, hosts)
+    startDump(net, hosts)
     
-    # each client pings server h1
-    for i in range(1, numHosts):
-        hosts[i].cmd('ping -c 1 10.0.0.1')
-
     time.sleep(2)
 
     # start server application
-    print(hosts[0].cmd('ITGRecv &'))
+    print(serv.cmd('ITGRecv &'))
 
     time.sleep(2)
     
-    # start client application
-    #for i in range(1, numHosts):
-    print(hosts[1].cmd('ITGSend ./itg.sh'))
+    # client
+    startClients(net, clients)
 
-    time.sleep(5)
+    time.sleep(1000)
 
 
 tests = { 'test': Test }
