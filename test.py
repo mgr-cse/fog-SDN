@@ -1,9 +1,17 @@
+from http import client
 import random
 import time
+import os
+import csv
 
 from mininet import net
+from mininet.topo import Topo
+from mininet.node import Node
 
 pcapPath = './pcaps/'
+logPath = './testLogs/'
+serverIP = '10.0.0.1'
+serverMask = 8
 
 def startDump(net:net, hosts):
     hostnum = 1
@@ -15,13 +23,29 @@ def startDump(net:net, hosts):
 
 
 def startClients(net:net, clients):
+    logfile = open(logPath + 'sendParams.csv', 'w')
+    writer = csv.writer(logfile)
+    header = ['host', 'serverIP', 'port', 'duration', 'size', 'proto']
+    writer.writerow(header)
+
     # generate random ports
     ports = random.sample(range(10000, 2**16-1), len(clients))
 
+    # generate random application
+
     # start ITGSend on clients
     for i in range(len(clients)):
+        # generate random duration 
+        dur = random.randint(1000, 20*1000)
+        app = ''
+        if random.randint(0, 1):
+            app = 'Telnet'
+        
         print("starting ITGSend on host: ", clients[i])
-        print(clients[i].cmd('ITGSend -a 10.0.0.1 -rp '+str(ports[i])+' -C 1000 -c 512 -T TCP &'))
+        print(clients[i].cmd('ITGSend -a ' + serverIP +' -rp '+ str(ports[i]) +' -C ' + str(dur) + ' -c 512 -T TCP ' + app + ' &'))
+        writer.writerow([clients[i], serverIP, str(ports[i]), str(dur), '512', 'TCP ' + app])
+    
+    logfile.close()
 
 def Test(net:net):
     numHosts = len(net.hosts)
@@ -46,10 +70,60 @@ def Test(net:net):
     # client
     startClients(net, clients)
 
-    time.sleep(1000)
+    time.sleep(60)
 
 
 tests = { 'test': Test }
+
+# creating topology with custom IPs
+class MyTopo(Topo):
+    def __init__(self):
+        #initialize topology
+        Topo.__init__(self)
+
+        #initialize parmeters here
+        numHosts = 10
+        numClients = numHosts - 1
+
+        # open log file
+        logfile = open(logPath + 'topo.csv', 'w')
+        writer = csv.writer(logfile)
+        header = [ 'host', 'IP' ]
+        writer.writerow(header)
+
+        # creating topology
+        hosts = []
+        #  add server
+        hosts.append(self.addHost('h1', ip=serverIP + '/' + str(serverMask)))
+        writer.writerow([ 'h1', serverIP + '/' + str(serverMask)])
+
+        # clients
+        clients = []
+
+        if not os.path.exists('./IpAdresses.txt'):
+            os.system('./generateIPs.py')
+        
+        ipFile = open('./IpAdresses.txt', 'r')
+        clientIPs = ipFile.read().splitlines()
+
+        ipIndices = random.sample(range(0, len(clientIPs)), numClients)
+
+        for i in range(0, numClients):
+            clients.append(self.addHost('h'+str(i+2), ip=clientIPs[ipIndices[i]]))
+            writer.writerow(['h'+str(i+2), clientIPs[ipIndices[i]]])
+
+        s1=self.addSwitch('s1')
+
+        hosts = hosts + clients
+
+        # join hosts with switch
+        for h in hosts:
+            self.addLink(h,s1, bw=10, delay='2ms')
+
+        logfile.close()
+
+topos={'mytopo':(lambda:MyTopo())}      
+
 
 
     
