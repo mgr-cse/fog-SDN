@@ -1,5 +1,4 @@
-import os
-import sys
+import random
 import time
 
 from mininet import net
@@ -16,13 +15,13 @@ def startDump(net:net, hosts):
 
 
 def startClients(net:net, clients):
-    basePort = 10001
-    hostnum = 1
-    for host in clients:
-        print("starting ITGSend on host: ", host)
-        print(host.cmd('ITGSend -a 10.0.0.1 -rp '+str(basePort)+' -C 1000 -c 512 -T TCP &'))
-        basePort += 1
-        hostnum += 1
+    # generate random ports
+    ports = random.sample(range(10000, 2**16-1), len(clients))
+
+    # start ITGSend on clients
+    for i in range(len(clients)):
+        print("starting ITGSend on host: ", clients[i])
+        print(clients[i].cmd('ITGSend -a 10.0.0.1 -rp '+str(ports[i])+' -C 1000 -c 512 -T TCP &'))
 
 def Test(net:net):
     numHosts = len(net.hosts)
