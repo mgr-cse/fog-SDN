@@ -12,6 +12,7 @@ import os
 import copy
 import pickle
 import sklearn
+import pandas as pd
 
 ## GLOBAL VARS
 # learning rates
@@ -27,6 +28,10 @@ flows = {}      # current stats about flows
 history = {}    # stats about flow in previous sampling time
 # header for csv with flow data stored
 header = ['time', 'source.IP', 'dest.IP', 'source.port', 'dest.port', 'nw_proto', 'fwd.total_packets', 'fwd.total_bytes', 'bwd.total_packets', 'bwd.total_bytes', 'duration', 'iat_est', 'rtt_est']
+header_labeled = ['time', 'source.IP', 'dest.IP', 'source.port', 'dest.port', 'nw_proto', 'fwd.total_packets', 'fwd.total_bytes', 'bwd.total_packets', 'bwd.total_bytes', 'duration', 'iat_est', 'rtt_est', 'label']
+predictor_format = c = ['source.port', 'dest.port', 'fwd.total_packets', 'fwd.total_bytes','bwd.total_packets', 'bwd.total_bytes', 'duration',
+'source.IP.1', 'dest.IP.1', 'source.IP.2', 'dest.IP.2', 'source.IP.3',
+'dest.IP.3', 'source.IP.4', 'dest.IP.4']
 
 
 # def send_data(sock, data_list):
@@ -36,7 +41,7 @@ header = ['time', 'source.IP', 'dest.IP', 'source.port', 'dest.port', 'nw_proto'
 
 ## TIMER MODULE FUNCTION
 # timer function that invokes write-out periodically
-def _timer_func (writer, sock, loaded_model):
+def _timer_func (writer, sock):
     for connection in core.openflow._connections.values():
         connection.send(of.ofp_stats_request(body=of.ofp_flow_stats_request()))
         # connection.send(of.ofp_stats_request(body=of.ofp_port_stats_request()))
@@ -46,11 +51,27 @@ def _timer_func (writer, sock, loaded_model):
         for key, f in flows.items():
             l = f.to_list(now)
             writer.writerow(l)
+
             flows[key].update_rtt_iat(key)                  # update iat & rtt every sampling time
             history[key] = copy.deepcopy(flows[key])        # store current state in history
             # send_data(sock, json.dumps(f.to_list()))
-            if loaded_model is not None:
-                pred = loaded_model.predict(l[1:])
+
+def _timer_func_predictor(writer, sock, loaded_model):
+    for connection in core.openflow._connections.values():
+        connection.send(of.ofp_stats_request(body=of.ofp_flow_stats_request()))
+        # connection.send(of.ofp_stats_request(body=of.ofp_port_stats_request()))
+        log.debug("Sent flow stats request to %s", dpid_to_str(connection.dpid))
+        log.debug("updating flow stats & predictions in file...")
+        now = time()
+        for key, f in flows.items():
+            l = f.to_list(now)
+            pred = loaded_model.predict(f.parse_for_prediction())[0]
+            l.append(pred)
+            writer.writerow(l)
+
+            flows[key].update_rtt_iat(key)                  # update iat & rtt every sampling time
+            history[key] = copy.deepcopy(flows[key])        # store current state in history
+            # send_data(sock, json.dumps(f.to_list()))
 
 
 
@@ -100,9 +121,9 @@ class Flow:
         d = self.duration - history[key].duration
             
         # debug info
-        self.print_flow()
-        history[key].print_flow()
-        print("d = %f, del_f = %f, del_b = %f"%(d,del_f, del_b))
+        # self.print_flow()
+        # history[key].print_flow()
+        # print("d = %f, del_f = %f, del_b = %f"%(d,del_f, del_b))
             
         # update rtt
         if del_f == 0 and del_b == 0:
@@ -126,9 +147,18 @@ class Flow:
         # else don't update
         else:
             pass
-
-
-
+    
+    def parse_for_prediction (self):
+        nw_src_parsed = self.nw_src.split(".")
+        nw_dst_parsed = self.nw_dst.split(".")
+        t = self.to_list(0)
+        t = t[3:10]
+        for i in range(4):
+            t.append(nw_src_parsed[i])
+            t.append(nw_dst_parsed[i])
+        
+        df = pd.DataFrame([dict(zip(predictor_format, t))])
+        return df
 
     def to_list (self, time):
         return [time, self.nw_src, self.nw_dst, self.tp_src, self.tp_dst, self.nw_proto,
@@ -207,16 +237,12 @@ def launch (filename, HOST= None, PORT = None, classifier= None):
     # core.openflow.addListenerByName("PortStatsReceived", _handle_portstats_received)
 
     # prepare the csv file from given path
-    path = "./"+filename
+    path = "./poxLogs/"+filename
     file = open(path, 'w+')
+    log.debug("opened log file {} successfully".format(path))
     writer = csv.writer(file)
-    writer.writerow(header)
+    # writer.writerow(header)
 
-    # load classifier
-    loaded_model = None
-    if classifier is not None:
-        classifier_path = "/model/" + classifier + ".pth"
-        loaded_model = pickle.load(open(classifier_path, 'wb'))
 
     # data sending over network to data plane/intelligence
     sock = None
@@ -228,5 +254,18 @@ def launch (filename, HOST= None, PORT = None, classifier= None):
         except:
             log.debug("failure in socket")
 
-    # timer to execute stats request periodically
-    Timer(T, _timer_func, args= [writer, sock, loaded_model], recurring=True)
+    # load classifier
+    if classifier is not None:
+        classifier_path = "./model/" + classifier + ".pth"
+        loaded_model = pickle.load(open(classifier_path, 'rb'))
+        log.debug("successfully loaded model {}".format(classifier))
+        writer.writerow(header_labeled)
+            # timer to execute stats request periodically
+        Timer(T, _timer_func_predictor, args= [writer, sock, loaded_model], recurring=True)
+        
+    else:
+        writer.writerow(header)
+        # timer to execute stats request periodically
+        Timer(T, _timer_func, args= [writer, sock], recurring=True)
+
+
