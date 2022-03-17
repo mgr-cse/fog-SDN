@@ -25,3 +25,4 @@ pypy/
 *.leases
 *.bak
 pcaps/*
+pox-runs/*
