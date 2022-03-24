@@ -26,3 +26,6 @@ pypy/
 *.bak
 pcaps/*
 pox-runs/*
+poxLogs/*
+pox-data/*
+tempFiles/*

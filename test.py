@@ -23,7 +23,7 @@ def startDump(net:net, hosts):
 
 
 def startClients(net:net, clients):
-    logfile = open(logPath + 'sendParams.csv', 'w')
+    logfile = open(pcapPath + 'sendParams.csv', 'w')
     writer = csv.writer(logfile)
     header = ['host', 'serverIP', 'port', 'duration', 'size', 'proto']
     writer.writerow(header)
@@ -80,13 +80,22 @@ class MyTopo(Topo):
     def __init__(self):
         #initialize topology
         Topo.__init__(self)
+        
+        # set locations for appropriate run
+        global pcapPath
+        runId = os.popen('cat tempFiles/runId.txt').read()
+        runId = int(runId)
+        pcapPath = pcapPath + str(runId) + '/'
+        os.system('mkdir -p ' + pcapPath)
+
 
         #initialize parmeters here
-        numHosts = 10
+        numHosts = os.popen('cat tempFiles/numHost.txt').read()
+        numHosts = int(numHosts)
         numClients = numHosts - 1
 
         # open log file
-        logfile = open(logPath + 'topo.csv', 'w')
+        logfile = open(pcapPath + 'topo.csv', 'w')
         writer = csv.writer(logfile)
         header = [ 'host', 'IP' ]
         writer.writerow(header)
@@ -100,10 +109,10 @@ class MyTopo(Topo):
         # clients
         clients = []
 
-        if not os.path.exists('./IpAdresses.txt'):
+        if not os.path.exists('./tempFiles/IpAdresses.txt'):
             os.system('./generateIPs.py')
         
-        ipFile = open('./IpAdresses.txt', 'r')
+        ipFile = open('./tempFiles/IpAdresses.txt', 'r')
         clientIPs = ipFile.read().splitlines()
 
         ipIndices = random.sample(range(0, len(clientIPs)), numClients)
