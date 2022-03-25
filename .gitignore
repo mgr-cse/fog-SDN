@@ -29,3 +29,4 @@ pox-runs/*
 poxLogs/*
 pox-data/*
 tempFiles/*
+replay-data/*

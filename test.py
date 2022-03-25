@@ -14,7 +14,7 @@ serverIP = '10.0.0.1'
 serverMask = 8
 
 def startDump(net:net, hosts):
-    hostnum = 1
+    hostnum = 2
     for host in hosts:
         host.cmd('tcpdump -w '+pcapPath+'h'+str(hostnum)+'.pcap&')
         print("starting tcpdump on host: ", host)
@@ -58,7 +58,7 @@ def Test(net:net):
     clients = hosts[1:]
     
     # run tcpdump on each node
-    startDump(net, hosts)
+    startDump(net, clients)
     
     time.sleep(2)
 

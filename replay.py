@@ -8,21 +8,10 @@ from mininet import net
 from mininet.topo import Topo
 from mininet.node import Node
 
-pcapPath = './pcaps/'
-logPath = './testLogs/'
 serverIP = '10.0.0.1'
 serverMask = 8
-run =  1
 
-dataPath = './pox-runs/run'+str(run)+'/'
-
-def startDump(net:net, hosts):
-    hostnum = 1
-    for host in hosts:
-        host.cmd('tcpdump -w '+pcapPath+'h'+str(hostnum)+'.pcap&')
-        print("starting tcpdump on host: ", host)
-        time.sleep(1)
-        hostnum += 1
+dataPath = ''
 
 
 def startClients(net:net, clients):
@@ -41,9 +30,6 @@ def Test(net:net):
 
     serv = hosts[0]
     clients = hosts[1:]
-    
-    # run tcpdump on each node
-    #startDump(net, hosts)
     
     time.sleep(2)
 
@@ -66,9 +52,17 @@ class MyTopo(Topo):
         #initialize topology
         Topo.__init__(self)
 
-        #initialize parmeters here
-        numHosts = 10
+        # number of hosts
+        numHosts = os.popen('cat tempFiles/numHost.txt').read()
+        numHosts = int(numHosts)
         numClients = numHosts - 1
+
+        # get runId
+        runId = os.popen('cat tempFiles/runId.txt').read()
+        runId = int(runId)
+
+        global dataPath
+        dataPath = './pox-data/' + str(numHosts) + '/pcaps/' + str(runId) + '/'
 
 
         # creating topology
@@ -78,9 +72,6 @@ class MyTopo(Topo):
 
         # clients
         clients = []
-
-        if not os.path.exists('./IpAdresses.txt'):
-            os.system('./generateIPs.py')
 
         clientIPs = []
         
