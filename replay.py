@@ -41,7 +41,7 @@ def Test(net:net):
     # client
     startClients(net, clients)
 
-    time.sleep(60)
+    time.sleep(60*4)
 
 
 tests = { 'test': Test }

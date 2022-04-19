@@ -5,7 +5,7 @@ hosts="$1"
 classifier="$2"
 
 # select last 4 runs
-selectRuns=`seq 6 1 10`
+selectRuns=`seq 7 1 10`
 
 
 # dump host number

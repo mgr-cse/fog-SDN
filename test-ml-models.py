@@ -1,12 +1,16 @@
+#!/bin/python
+
+import sys
 from doctest import testmod
 from unittest import result
 import numpy as np
 import pandas as pd
+import ipaddress
 
 #@title number of hosts
 # choose number of hosts to generate combined_train.csv
-numHosts = 10 #@param {type:"integer"}
-models = ['dtree_depth5', 'dtree_depth10', 'random_forest50_depth10', 'svc_linear','lin_logloss_sgd_stop5', 'lin_logloss_sgd_stop10', 'lin_logloss_sgd_stop15', 'lin_logloss_sgd_nostop']
+numHosts = int(sys.argv[1])
+models = ['dtree_depth5', 'dtree_depth10', 'random_forest50_depth10', 'lin_logloss_sgd_stop10', 'lin_logloss_sgd_stop15', 'lin_logloss_sgd_nostop']
 
 sdn_fog_folder = './'
 
@@ -73,10 +77,12 @@ def combined_data(numHosts:int, model_descriptor:str):
     joinedData.to_csv(sdn_fog_folder + 'test-data/combined_train_' + model_descriptor + '_'+ str(numHosts) + ".csv", index= False)
 
 cols = ['source.IP','dest.IP','source.port','dest.port','fwd.total_packets','fwd.total_bytes','bwd.total_packets','bwd.total_bytes','duration','labels']
-def formatData(numHosts:int, model_descriptor:str):
-    combined_data(numHosts, model_descriptor)
-    filename = "combined_train_" + model_descriptor + '_' + str(numHosts) + ".csv"
-    train = pd.read_csv('./test-data/' + filename, usecols= cols)
+def formatData(numHosts:int, runId:int, model_descriptor:str):
+    #combined_data(numHosts, model_descriptor)
+    #filename = "combined_train_" + model_descriptor + '_' + str(numHosts) + ".csv"
+    #train = pd.read_csv('./test-data/' + filename, usecols= cols)
+    train = ParseCSV(numHosts, runId, model_descriptor)
+    train = train.loc[:, cols]
 
     train['source.IP'] = train['source.IP'].astype('str')
     train['dest.IP'] = train['dest.IP'].astype('str')
@@ -92,7 +98,8 @@ from sklearn.base import BaseEstimator, TransformerMixin
 
 class IPTransformer(BaseEstimator, TransformerMixin):
   def __init__(self):
-    print("Parse both source & dest IP fields to 4 int fields, drop original IP fields")
+    #print("Parse both source & dest IP fields to 4 int fields, drop original IP fields")
+    pass
 
   def parseIP(self, ip_list):
     ip1 = []
@@ -137,8 +144,14 @@ class IPTransformer(BaseEstimator, TransformerMixin):
 
 import pickle
 
-def testModel(numHosts:int, model_descriptor:str):
-    testData = formatData(numHosts, model_descriptor)
+def getIP(instance, type:str):
+    ip = 0
+    for i in range(4):
+        ip += instance[type + '.IP.'+ str(i+1)] << 8*(3-i)
+    return ip
+
+def testModel(numHosts:int, runId:int, model_descriptor:str, file):
+    testData = formatData(numHosts, runId,model_descriptor)
     tr = IPTransformer()
     tr.fit(testData)
     parsed_test = tr.transform(testData)
@@ -150,7 +163,34 @@ def testModel(numHosts:int, model_descriptor:str):
     model_file = sdn_fog_folder + 'model/' + str(numHosts) + '/' + model_descriptor + '.pth'
     model = pickle.load(open(model_file, 'rb'))
     result = model.score(X, y)
-    print(model_descriptor + ' Accuracy ' + str(result))
+
+    serverIP = (10 << 24) + 1
+    # find first correct prediction of model
+    ip_status = dict()
+    pred = model.predict(X)
+    
+    for i, instance in X.iterrows():
+        srcIP = getIP(instance, 'source')
+        destIP = getIP(instance, 'dest')
+        if destIP == serverIP:
+            if srcIP not in ip_status:
+                ip_status[srcIP] = [0 , 0]
+            if ip_status[srcIP][1] == 0:
+                if pred[i] == y[i]:
+                    ip_status[srcIP][1] = 1
+                ip_status[srcIP][0] += 1
+    file.write('host,first_iter\n')
+    for key in ip_status:
+        ip = str(ipaddress.IPv4Address(key))
+        itr = ip_status[key][0]
+        file.write(ip + ',' + str(itr) + '\n')
+    
+    file.write('accuracy,' + str(result) + '\n')
+
 
 for m in models:
-    testModel(numHosts, m)
+    for runId in range(7, 11):
+        file_path = './test-data/' + m + '/' + str(numHosts) + '/test' + str(runId) + '.csv'
+        file = open(file_path, 'w')
+        testModel(numHosts, runId, m, file)
+        file.close()
