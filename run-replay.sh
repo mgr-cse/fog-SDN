@@ -2,6 +2,7 @@
 
 # tunable parameters
 hosts="$1"
+classifier="$2"
 
 # select last 4 runs
 selectRuns=`seq 6 1 10`
@@ -16,7 +17,7 @@ for i in $selectRuns; do
     echo $i > tempFiles/runId.txt
 
     # start pox
-    ./test.sh test$i.txt &
+    ./test.sh test$i.txt $2 &
     POXPID=$!
     sleep 5
 
@@ -31,4 +32,6 @@ for i in $selectRuns; do
 done
 
 mkdir -p ./replay-data/$hosts
+mkdir -p ../pox-classifier-testing/$classifier/$hosts/
+cp ./poxLogs/* ../pox-classifier-testing/$classifier/$hosts/
 mv ./poxLogs/* ./replay-data/$hosts/
