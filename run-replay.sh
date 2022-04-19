@@ -17,7 +17,7 @@ for i in $selectRuns; do
     echo $i > tempFiles/runId.txt
 
     # start pox
-    ./test.sh test$i.txt $2 &
+    ./test.sh test$i.txt $hosts/$2 &
     POXPID=$!
     sleep 5
 
@@ -32,6 +32,6 @@ for i in $selectRuns; do
 done
 
 mkdir -p ./replay-data/$hosts
-mkdir -p ../pox-classifier-testing/$classifier/$hosts/
-cp ./poxLogs/* ../pox-classifier-testing/$classifier/$hosts/
+mkdir -p ./test-data/$classifier/$hosts/
+cp ./poxLogs/* ./test-data/$classifier/$hosts/
 mv ./poxLogs/* ./replay-data/$hosts/
